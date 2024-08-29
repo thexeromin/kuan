@@ -1,13 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <threads.h>
 
 #include "./socket.h"
 
 #define PORT "8181"
+
+int handle_connection(void *arg);
 
 int main(void) {
     int listener;   // Listening socket descriptor
@@ -49,8 +53,27 @@ int main(void) {
         );
         printf("[kuan]: got connection from %s\n", client_ip);
 
-        // launch a separate thread & handle request
+        // handle request in separate thread
+        thrd_t t;
+        int *p_fd = malloc(sizeof *p_fd);
+        *p_fd = new_fd;
+
+        thrd_create(&t, handle_connection, p_fd);
+        thrd_detach(t);
     }
 
+    return 0;
+}
+
+int handle_connection(void *arg) {
+    int client_fd = *(int*)arg;
+    free(arg);
+
+    // TODO: parse request
+
+    // TODO: send response
+    if (send(client_fd, "Hello, world!", 13, 0) == -1)
+        perror("send");
+    close(client_fd);
     return 0;
 }
