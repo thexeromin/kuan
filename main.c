@@ -13,8 +13,14 @@
 #define PORT "8181"
 #define MAX_DATA_SIZE 1000
 
+typedef struct {
+    char method[5];
+    char path[10];
+} Req;
+
 int handle_connection(void *arg);
-void handle_send(int sock_fd);
+void parse_request(char *str, Req *req);
+void handle_send(int sock_fd, char *fname);
 
 int main(void) {
     int listener;   // Listening socket descriptor
@@ -73,26 +79,66 @@ int handle_connection(void *arg) {
     free(arg);
     char buf[MAX_DATA_SIZE];
     int numbytes;
+    Req req;
 
-    // TODO: parse request
+    // parse request
     if((numbytes = recv(client_fd, buf, MAX_DATA_SIZE-1, 0)) == -1) {
         perror("recv");
         exit(1);
     }
-
     buf[numbytes] = '\0';
-    // printf("client: received '%s'\n",buf);
 
-    // TODO: send response
-    handle_send(client_fd);
+    parse_request(buf, &req);
+
+    // handle routes
+    if(strcmp(req.method, "GET") != 0) {
+        handle_send(client_fd, "public/404.html");
+    }
+
+    if(strcmp(req.path, "/") == 0) {
+        handle_send(client_fd, "public/index.html");
+    } else if(strcmp(req.path, "/about") == 0) {
+        handle_send(client_fd, "public/about.html");
+    } else if(strcmp(req.path, "/contact") == 0) {
+        handle_send(client_fd, "public/contact.html");
+    }
+
     close(client_fd);
     return 0;
 }
 
-void handle_send(int sock_fd) {
+void parse_request(char *str, Req *req) {
+    int parse_idx = 0;
+    int m, n;
+    m = n = 0;
+
+    for(int i = 0; str[i]; i++) {
+        if(str[i] == ' ') parse_idx++;
+
+        if(parse_idx > 1) {
+            break;
+        }
+
+        if(str[i] != ' ') {
+            switch(parse_idx) {
+            case 0:
+                // method parse
+                req->method[m++] = str[i];
+                break;
+            case 1:
+                // url path parse
+                req->path[n++] = str[i];
+            }
+        }
+    }
+
+    req->method[m] = '\0';
+    req->path[n] = '\0';
+}
+
+void handle_send(int sock_fd, char *fname) {
     char buf[2000];
     char res[2500];
-    const char *fname = "public/index.html";
     FILE *fp = fopen(fname, "r");
 
     if(!fp) {
