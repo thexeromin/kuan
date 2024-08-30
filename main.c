@@ -90,8 +90,8 @@ int handle_connection(void *arg) {
 }
 
 void handle_send(int sock_fd) {
-    char buf[100];
-    char res[255];
+    char buf[2000];
+    char res[2500];
     const char *fname = "public/index.html";
     FILE *fp = fopen(fname, "r");
 
