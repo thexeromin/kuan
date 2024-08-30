@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -10,8 +11,10 @@
 #include "./socket.h"
 
 #define PORT "8181"
+#define MAX_DATA_SIZE 1000
 
 int handle_connection(void *arg);
+void handle_send(int sock_fd);
 
 int main(void) {
     int listener;   // Listening socket descriptor
@@ -68,12 +71,49 @@ int main(void) {
 int handle_connection(void *arg) {
     int client_fd = *(int*)arg;
     free(arg);
+    char buf[MAX_DATA_SIZE];
+    int numbytes;
 
     // TODO: parse request
+    if((numbytes = recv(client_fd, buf, MAX_DATA_SIZE-1, 0)) == -1) {
+        perror("recv");
+        exit(1);
+    }
+
+    buf[numbytes] = '\0';
+    // printf("client: received '%s'\n",buf);
 
     // TODO: send response
-    if (send(client_fd, "Hello, world!", 13, 0) == -1)
-        perror("send");
+    handle_send(client_fd);
     close(client_fd);
     return 0;
+}
+
+void handle_send(int sock_fd) {
+    char buf[100];
+    char res[255];
+    const char *fname = "public/index.html";
+    FILE *fp = fopen(fname, "r");
+
+    if(!fp) {
+        perror("File opening failed");
+        return EXIT_FAILURE;
+    }
+
+    // copy file to string
+    int c, i;
+    for(i = 0; (c = fgetc(fp)) != EOF; i++)
+        buf[i] = c;
+    buf[i] = '\0';
+
+    // build response
+    sprintf(
+        res,
+        "HTTP/1.1 200 OK\r\nconten-type: text/html\r\n\r\n%s",
+        buf
+    );
+
+    // send it
+    if (send(sock_fd, res, strlen(res), 0) == -1)
+        perror("send");
 }
