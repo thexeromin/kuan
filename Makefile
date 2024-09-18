@@ -2,9 +2,9 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=gnu11
 LDFLAGS =
 
-SRCS = main.c socket.c
+SRCS = main.c socket.c queue.c
 OBJS = $(SRCS:.c=.o)
-DEPS = socket.h
+DEPS = socket.h queue.h
 
 TARGET = kuan
 

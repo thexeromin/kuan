@@ -9,18 +9,24 @@
 #include <threads.h>
 
 #include "./socket.h"
+#include "./queue.h"
 
 #define PORT "8181"
 #define MAX_DATA_SIZE 1000
+#define THREAD_POOL_SIZE 5
 
 typedef struct {
     char method[5];
     char path[10];
 } Req;
 
+thrd_t thread_pool[THREAD_POOL_SIZE];
+mtx_t mutex;
+
 int handle_connection(void *arg);
+int thread_function(void *arg);
 void parse_request(char *str, Req *req);
-void handle_send(int sock_fd, char *fname);
+int handle_send(int sock_fd, char *fname);
 
 int main(void) {
     int listener;   // Listening socket descriptor
@@ -31,6 +37,14 @@ int main(void) {
 
     char client_ip[INET6_ADDRSTRLEN];
 
+    // init mutex
+    mtx_init(&mutex, mtx_plain);
+
+    // create thread pool
+    for(int i = 0; i < THREAD_POOL_SIZE; i++) {
+        thrd_create(thread_pool + i, thread_function, NULL);
+    }
+
     // Set up and get a listening socket
     listener = get_listener_socket(PORT);
 
@@ -39,7 +53,7 @@ int main(void) {
         exit(1);
     }
 
-    printf("[kuan]: listening on port: " PORT "\n");
+    printf("[kuan]: serving at http://localhost:" PORT "\n");
 
     // Main accept() loop
     while(1) {
@@ -63,15 +77,30 @@ int main(void) {
         printf("[kuan]: got connection from %s\n", client_ip);
 
         // handle request in separate thread
-        thrd_t t;
         int *p_fd = malloc(sizeof *p_fd);
         *p_fd = new_fd;
-
-        thrd_create(&t, handle_connection, p_fd);
-        thrd_detach(t);
+        mtx_lock(&mutex);
+        enqueue(p_fd);
+        mtx_unlock(&mutex);
     }
 
     return 0;
+}
+
+int thread_function(void *arg) {
+    (void)arg;
+
+    while(1) {
+        int *psock_fd;
+        mtx_lock(&mutex);
+        psock_fd = dequeue();
+        mtx_unlock(&mutex);
+
+        if(psock_fd != NULL) {
+            // we have a connection
+            handle_connection(psock_fd);
+        }
+    }
 }
 
 int handle_connection(void *arg) {
@@ -136,7 +165,7 @@ void parse_request(char *str, Req *req) {
     req->path[n] = '\0';
 }
 
-void handle_send(int sock_fd, char *fname) {
+int handle_send(int sock_fd, char *fname) {
     char buf[2000];
     char res[2500];
     FILE *fp = fopen(fname, "r");
@@ -162,4 +191,6 @@ void handle_send(int sock_fd, char *fname) {
     // send it
     if (send(sock_fd, res, strlen(res), 0) == -1)
         perror("send");
+
+    return 0;
 }
