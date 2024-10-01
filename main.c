@@ -22,6 +22,7 @@ typedef struct {
 
 thrd_t thread_pool[THREAD_POOL_SIZE];
 mtx_t mutex;
+cnd_t cond_var;
 
 int handle_connection(void *arg);
 int thread_function(void *arg);
@@ -37,8 +38,9 @@ int main(void) {
 
     char client_ip[INET6_ADDRSTRLEN];
 
-    // init mutex
+    // init mutex & conditional variables
     mtx_init(&mutex, mtx_plain);
+    cnd_init(&cond_var);
 
     // create thread pool
     for(int i = 0; i < THREAD_POOL_SIZE; i++) {
@@ -81,6 +83,7 @@ int main(void) {
         *p_fd = new_fd;
         mtx_lock(&mutex);
         enqueue(p_fd);
+        cnd_signal(&cond_var);
         mtx_unlock(&mutex);
     }
 
@@ -93,7 +96,10 @@ int thread_function(void *arg) {
     while(1) {
         int *psock_fd;
         mtx_lock(&mutex);
-        psock_fd = dequeue();
+        if((psock_fd = dequeue()) == NULL) {
+            cnd_wait(&cond_var, &mutex);
+            psock_fd = dequeue();
+        }
         mtx_unlock(&mutex);
 
         if(psock_fd != NULL) {
